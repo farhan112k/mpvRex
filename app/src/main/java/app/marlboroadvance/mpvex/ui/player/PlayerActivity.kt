@@ -198,6 +198,7 @@ class PlayerActivity :
   private var pendingIntentExtras = false // Track if intent extras should be applied to next loaded file
 
   @Volatile private var needsAspectReapply = false // Track if aspect ratio needs to be reapplied after video is ready (for Video/Smart orientation modes)
+  private var lastIntrinsicAspect: Double = -1.0 // Track intrinsic aspect changes
 
   // ==================== Background Playback ====================
 
@@ -1818,13 +1819,21 @@ class PlayerActivity :
         val aspect = player.getVideoOutAspect()
         Log.d(TAG, "video-params/aspect changed: $aspect")
         pipHelper.updatePictureInPictureParams()
+
+        val intrinsicChanged = lastIntrinsicAspect != value
+        lastIntrinsicAspect = value
+
         // Update orientation when video aspect ratio changes (fixes Video orientation mode)
         // BUT: Don't update if aspect is being overridden (stretch/custom aspect mode)
         // to prevent infinite orientation switching loop
         val aspectOverride = MPVLib.getPropertyDouble("video-aspect-override") ?: -1.0
+
+        // ONLY trigger orientation change if the intrinsic aspect actually changed,
+        // NOT when we're just enabling/disabling stretch mode (which toggles the override)
         if (playerPreferences.orientation.get() == PlayerOrientation.Video && 
             aspect != null && 
-            aspectOverride <= 0.0) {
+            aspectOverride <= 0.0 &&
+            intrinsicChanged) {
           setOrientation()
         }
       }
@@ -1877,6 +1886,8 @@ class PlayerActivity :
    */
   private fun handleFileLoaded() {
     isOrientationRestored = false
+    viewModel.isManuallyRotated = false
+    lastIntrinsicAspect = -1.0
     // Extract fileName from intent only if not already set
     // This preserves fileName set in onNewIntent or onCreate
     if (fileName.isBlank()) {
@@ -2604,6 +2615,7 @@ class PlayerActivity :
    * @param rotation Optional video rotation from metadata to correctly determine aspect ratio
    */
   private fun setOrientation(width: Int = -1, height: Int = -1, rotation: Int = 0) {
+    if (viewModel.isManuallyRotated) return
     val orientationPref = playerPreferences.orientation.get()
 
     requestedOrientation =

@@ -959,7 +959,10 @@ class PlayerViewModel(
 
   // ==================== Screen Rotation ====================
 
+  var isManuallyRotated = false
+
   fun cycleScreenRotations() {
+    isManuallyRotated = true
     // Temporarily cycle orientation WITHOUT modifying preferences
     // Preferences remain the single source of truth and will be reapplied on next video
     host.hostRequestedOrientation =
