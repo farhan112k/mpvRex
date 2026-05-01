@@ -194,7 +194,7 @@ class PlayerViewModel(
         if (time != null) {
           _precisePosition.value = time.toFloat()
         }
-        delay(16) // ~60fps updates
+        delay(42) // ~24fps updates
       }
     }
 
@@ -387,7 +387,7 @@ class PlayerViewModel(
         
         // Update hr-seek settings dynamically
         MPVLib.setPropertyString("hr-seek", if (shouldUsePreciseSeeking) "yes" else "no")
-        MPVLib.setPropertyString("hr-seek-framedrop", if (shouldUsePreciseSeeking) "no" else "yes")
+        MPVLib.setPropertyString("hr-seek-framedrop", "yes")
       }
     }
     
