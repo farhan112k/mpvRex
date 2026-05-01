@@ -187,17 +187,6 @@ class PlayerViewModel(
   private val volumeBoostCap by MPVLib.propInt["volume-max"].collectAsState(viewModelScope)
 
   init {
-    // Poll precise position only when playing
-    viewModelScope.launch {
-      while (isActive) {
-        val time = MPVLib.getPropertyDouble("time-pos")
-        if (time != null) {
-          _precisePosition.value = time.toFloat()
-        }
-        delay(42) // ~24fps updates
-      }
-    }
-
     // Update precise duration when the integer duration changes (avoid polling)
     viewModelScope.launch {
       MPVLib.propInt["duration"].collect { _ ->
@@ -407,6 +396,17 @@ class PlayerViewModel(
 
   fun onMpvCoreInitialized() {
     _customButtonManager.onMpvInitialized()
+
+    // Start polling ONLY after MPV is initialized
+    viewModelScope.launch {
+      while (isActive) {
+        val time = MPVLib.getPropertyDouble("time-pos")
+        if (time != null) {
+          _precisePosition.value = time.toFloat()
+        }
+        delay(42) // ~24fps updates
+      }
+    }
   }
 
   // ==================== Custom Buttons ====================
