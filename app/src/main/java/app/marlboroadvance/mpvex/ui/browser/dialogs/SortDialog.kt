@@ -1,11 +1,10 @@
 package app.marlboroadvance.mpvex.ui.browser.dialogs
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.border
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,14 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -31,20 +29,23 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun SortDialog(
@@ -72,89 +73,96 @@ fun SortDialog(
 
   val (ascLabel, descLabel) = getLabelForType(sortType, sortOrderAsc)
 
-  AlertDialog(
+  Dialog(
     onDismissRequest = onDismiss,
-    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-    title = {
-      Text(
-        text = title,
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurface,
-      )
-    },
-    text = {
+    properties = DialogProperties(usePlatformDefaultWidth = false)
+  ) {
+    Surface(
+      shape = MaterialTheme.shapes.extraLarge,
+      color = MaterialTheme.colorScheme.surfaceContainerHigh,
+      tonalElevation = 6.dp,
+      modifier = modifier
+        .fillMaxWidth(0.80f)
+        .padding(vertical = 24.dp)
+    ) {
       Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .verticalScroll(rememberScrollState()),
+        modifier = Modifier.padding(24.dp)
       ) {
-        HorizontalDivider()
+        // Title
+        Text(
+          text = title,
+          style = MaterialTheme.typography.headlineSmall,
+          fontWeight = FontWeight.Medium,
+          color = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.padding(bottom = 16.dp)
+        )
 
-        if (showSortOptions) {
-          DialogSectionTitle(text = "Sort")
-          
-          SortTypeSelector(
-            sortType = sortType,
-            onSortTypeChange = onSortTypeChange,
-            types = types,
-            icons = icons,
-            modifier = Modifier.fillMaxWidth(),
-          )
+        // Content
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        ) {
+          HorizontalDivider()
 
-          Spacer(modifier = Modifier.height(8.dp))
+          if (showSortOptions) {
+            DialogSectionTitle(text = "Sort")
 
-          SortOrderSelector(
-            sortOrderAsc = sortOrderAsc,
-            onSortOrderChange = onSortOrderChange,
-            ascLabel = ascLabel,
-            descLabel = descLabel,
-            modifier = Modifier.fillMaxWidth(),
-          )
-        }
+            SortTypeSelector(
+              sortType = sortType,
+              onSortTypeChange = onSortTypeChange,
+              types = types,
+              icons = icons,
+              modifier = Modifier.fillMaxWidth(),
+            )
 
-        if (viewModeSelector != null) {
-          HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
-          DialogSectionTitle(text = viewModeSelector.label)
-          ViewModeSelectorComponent(
-            viewModeSelector = viewModeSelector,
-            enabled = enableViewModeOptions,
-            modifier = Modifier.fillMaxWidth(),
-          )
-        }
+            Spacer(modifier = Modifier.height(8.dp))
 
-        if (layoutModeSelector != null) {
-          DialogSectionTitle(text = layoutModeSelector.label)
-          ViewModeSelectorComponent(
-            viewModeSelector = layoutModeSelector,
-            enabled = enableLayoutModeOptions,
-            modifier = Modifier.fillMaxWidth(),
-          )
-        }
+            SortOrderSelector(
+              sortOrderAsc = sortOrderAsc,
+              onSortOrderChange = onSortOrderChange,
+              ascLabel = ascLabel,
+              descLabel = descLabel,
+              modifier = Modifier.fillMaxWidth(),
+            )
+          }
 
-        if (folderGridColumnSelector != null || videoGridColumnSelector != null) {
-          HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
-          DialogSectionTitle(text = "Grid Columns")
-          GridColumnsSection(
-            folderGridColumnSelector = folderGridColumnSelector,
-            videoGridColumnSelector = videoGridColumnSelector,
-          )
-        }
+          if (viewModeSelector != null) {
+            HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+            DialogSectionTitle(text = viewModeSelector.label)
+            ViewModeSelectorComponent(
+              viewModeSelector = viewModeSelector,
+              enabled = enableViewModeOptions,
+              modifier = Modifier.fillMaxWidth(),
+            )
+          }
 
-        if (visibilityToggles.isNotEmpty()) {
-          HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
-          VisibilityTogglesSection(toggles = visibilityToggles)
+          if (layoutModeSelector != null) {
+            DialogSectionTitle(text = layoutModeSelector.label)
+            ViewModeSelectorComponent(
+              viewModeSelector = layoutModeSelector,
+              enabled = enableLayoutModeOptions,
+              modifier = Modifier.fillMaxWidth(),
+            )
+          }
+
+          if (folderGridColumnSelector != null || videoGridColumnSelector != null) {
+            HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+            DialogSectionTitle(text = "Grid Columns")
+            GridColumnsSection(
+              folderGridColumnSelector = folderGridColumnSelector,
+              videoGridColumnSelector = videoGridColumnSelector,
+            )
+          }
+
+          if (visibilityToggles.isNotEmpty()) {
+            HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+            VisibilityTogglesSection(toggles = visibilityToggles)
+          }
         }
       }
-    },
-    confirmButton = {},
-    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    tonalElevation = 6.dp,
-    shape = MaterialTheme.shapes.extraLarge,
-    modifier = modifier
-      .fillMaxWidth(0.80f)
-      .padding(vertical = 24.dp),
-  )
+    }
+  }
 }
 
 data class VisibilityToggle(
@@ -207,7 +215,7 @@ private fun SortTypeSelector(
   ) {
     types.forEachIndexed { index, type ->
       val isSelected = sortType == type
-      
+
       Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -220,7 +228,7 @@ private fun SortTypeSelector(
           )
           .clip(RoundedCornerShape(12.dp))
           .background(
-            if (isSelected) MaterialTheme.colorScheme.primaryContainer 
+            if (isSelected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
           )
           .clickable { onSortTypeChange(type) }
@@ -230,14 +238,14 @@ private fun SortTypeSelector(
           imageVector = icons[index],
           contentDescription = null,
           modifier = Modifier.size(24.dp),
-          tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer 
+          tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
                  else MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
           text = type,
           style = MaterialTheme.typography.labelMedium,
           fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-          color = if (isSelected) MaterialTheme.colorScheme.primary 
+          color = if (isSelected) MaterialTheme.colorScheme.primary
                   else MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
@@ -323,7 +331,7 @@ private fun VisibilityTogglesSection(
   toggles: List<VisibilityToggle>,
   modifier: Modifier = Modifier,
 ) {
-  var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+  var expanded by remember { mutableStateOf(false) }
 
   Column(modifier = modifier) {
     Row(
@@ -340,7 +348,7 @@ private fun VisibilityTogglesSection(
         color = MaterialTheme.colorScheme.onSurface
       )
       Icon(
-        imageVector = if (expanded) androidx.compose.material.icons.Icons.Filled.KeyboardArrowUp else androidx.compose.material.icons.Icons.Filled.KeyboardArrowDown,
+        imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
         contentDescription = if (expanded) "Collapse" else "Expand",
         tint = MaterialTheme.colorScheme.onSurfaceVariant
       )
