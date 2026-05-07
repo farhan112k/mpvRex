@@ -1569,6 +1569,7 @@ fun FileSystemSortDialog(
 ) {
   val browserPreferences = koinInject<BrowserPreferences>()
   val appearancePreferences = koinInject<app.marlboroadvance.mpvex.preferences.AppearancePreferences>()
+  val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
   val folderViewMode by browserPreferences.folderViewMode.collectAsState()
   val folderSortType by browserPreferences.folderSortType.collectAsState()
   val folderSortOrder by browserPreferences.folderSortOrder.collectAsState()
@@ -1621,29 +1622,33 @@ fun FileSystemSortDialog(
     showSortOptions = true,
     viewModeSelector = ViewModeSelector(
       label = "View Mode",
-      firstOptionLabel = "Folder",
-      secondOptionLabel = "Tree",
-      firstOptionIcon = Icons.Filled.ViewModule,
-      secondOptionIcon = Icons.Filled.AccountTree,
-      isFirstOptionSelected = folderViewMode == app.marlboroadvance.mpvex.preferences.FolderViewMode.AlbumView,
-      onViewModeChange = { isFirstOption ->
-        browserPreferences.folderViewMode.set(
-          if (isFirstOption) {
-            app.marlboroadvance.mpvex.preferences.FolderViewMode.AlbumView
-          } else {
-            app.marlboroadvance.mpvex.preferences.FolderViewMode.FileManager
-          },
-        )
+      options = listOf("Folder", "Tree", "File"),
+      icons = listOf(Icons.Filled.ViewModule, Icons.Filled.AccountTree, Icons.AutoMirrored.Filled.ViewList),
+      selectedIndex = when (folderViewMode) {
+        app.marlboroadvance.mpvex.preferences.FolderViewMode.AlbumView -> 0
+        app.marlboroadvance.mpvex.preferences.FolderViewMode.FileManager -> 1
+        app.marlboroadvance.mpvex.preferences.FolderViewMode.FlatFileView -> 2
+        else -> 0
+      },
+      onViewModeChange = { index ->
+        val newMode = when (index) {
+          0 -> app.marlboroadvance.mpvex.preferences.FolderViewMode.AlbumView
+          1 -> app.marlboroadvance.mpvex.preferences.FolderViewMode.FileManager
+          else -> app.marlboroadvance.mpvex.preferences.FolderViewMode.FlatFileView
+        }
+        browserPreferences.folderViewMode.set(newMode)
       },
     ),
     layoutModeSelector = ViewModeSelector(
       label = "Layout",
-      firstOptionLabel = "List",
-      secondOptionLabel = "Grid",
-      firstOptionIcon = Icons.AutoMirrored.Filled.ViewList,
-      secondOptionIcon = Icons.Filled.GridView,
-      isFirstOptionSelected = true, // Always list mode
-      onViewModeChange = { /* Disabled - do nothing */ },
+      options = listOf("List", "Grid"),
+      icons = listOf(Icons.AutoMirrored.Filled.ViewList, Icons.Filled.GridView),
+      selectedIndex = if (mediaLayoutMode == app.marlboroadvance.mpvex.preferences.MediaLayoutMode.LIST) 0 else 1,
+      onViewModeChange = { index ->
+        browserPreferences.mediaLayoutMode.set(
+          if (index == 0) app.marlboroadvance.mpvex.preferences.MediaLayoutMode.LIST else app.marlboroadvance.mpvex.preferences.MediaLayoutMode.GRID
+        )
+      },
     ),
     folderGridColumnSelector = null,
     videoGridColumnSelector = null,

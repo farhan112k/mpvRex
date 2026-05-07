@@ -545,7 +545,7 @@ data class VideoListScreen(
 }
 
 @Composable
-private fun VideoListContent(
+fun VideoListContent(
   folderId: String,
   videosWithInfo: List<VideoWithPlaybackInfo>,
   isLoading: Boolean,
@@ -840,7 +840,7 @@ private fun VideoListContent(
   }
 
 @Composable
-private fun VideoSortDialog(
+fun VideoSortDialog(
   isOpen: Boolean,
   onDismiss: () -> Unit,
   sortType: VideoSortType,
@@ -934,27 +934,31 @@ private fun VideoSortDialog(
     },
     viewModeSelector = ViewModeSelector(
       label = "View Mode",
-      firstOptionLabel = "Folder",
-      secondOptionLabel = "Tree",
-      firstOptionIcon = Icons.Filled.ViewModule,
-      secondOptionIcon = Icons.Filled.AccountTree,
-      isFirstOptionSelected = folderViewMode == FolderViewMode.AlbumView,
-      onViewModeChange = { isFirstOption ->
-        browserPreferences.folderViewMode.set(
-          if (isFirstOption) FolderViewMode.AlbumView else FolderViewMode.FileManager,
-        )
+      options = listOf("Folder", "Tree", "File"),
+      icons = listOf(Icons.Filled.ViewModule, Icons.Filled.AccountTree, Icons.AutoMirrored.Filled.ViewList),
+      selectedIndex = when (folderViewMode) {
+        app.marlboroadvance.mpvex.preferences.FolderViewMode.AlbumView -> 0
+        app.marlboroadvance.mpvex.preferences.FolderViewMode.FileManager -> 1
+        app.marlboroadvance.mpvex.preferences.FolderViewMode.FlatFileView -> 2
+        else -> 0
+      },
+      onViewModeChange = { index ->
+        val newMode = when (index) {
+          0 -> app.marlboroadvance.mpvex.preferences.FolderViewMode.AlbumView
+          1 -> app.marlboroadvance.mpvex.preferences.FolderViewMode.FileManager
+          else -> app.marlboroadvance.mpvex.preferences.FolderViewMode.FlatFileView
+        }
+        browserPreferences.folderViewMode.set(newMode)
       },
     ),
     layoutModeSelector = ViewModeSelector(
       label = "Layout",
-      firstOptionLabel = "List",
-      secondOptionLabel = "Grid",
-      firstOptionIcon = Icons.AutoMirrored.Filled.ViewList,
-      secondOptionIcon = Icons.Filled.GridView,
-      isFirstOptionSelected = mediaLayoutMode == MediaLayoutMode.LIST,
-      onViewModeChange = { isFirstOption ->
+      options = listOf("List", "Grid"),
+      icons = listOf(Icons.AutoMirrored.Filled.ViewList, Icons.Filled.GridView),
+      selectedIndex = if (mediaLayoutMode == app.marlboroadvance.mpvex.preferences.MediaLayoutMode.LIST) 0 else 1,
+      onViewModeChange = { index ->
         browserPreferences.mediaLayoutMode.set(
-          if (isFirstOption) MediaLayoutMode.LIST else MediaLayoutMode.GRID
+          if (index == 0) app.marlboroadvance.mpvex.preferences.MediaLayoutMode.LIST else app.marlboroadvance.mpvex.preferences.MediaLayoutMode.GRID
         )
       },
     ),

@@ -1,52 +1,50 @@
 package app.marlboroadvance.mpvex.ui.browser.dialogs
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @Composable
 fun SortDialog(
@@ -63,7 +61,7 @@ fun SortDialog(
   modifier: Modifier = Modifier,
   visibilityToggles: List<VisibilityToggle> = emptyList(),
   viewModeSelector: ViewModeSelector? = null,
-  layoutModeSelector:  ViewModeSelector? = null,
+  layoutModeSelector: ViewModeSelector? = null,
   folderGridColumnSelector: GridColumnSelector? = null,
   videoGridColumnSelector: GridColumnSelector? = null,
   showSortOptions: Boolean = true,
@@ -76,6 +74,7 @@ fun SortDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
+    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     title = {
       Text(
         text = title,
@@ -86,13 +85,15 @@ fun SortDialog(
     },
     text = {
       Column(
-        modifier =
-          Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier
+          .fillMaxWidth()
+          .verticalScroll(rememberScrollState()),
       ) {
+        HorizontalDivider()
+
         if (showSortOptions) {
+          DialogSectionTitle(text = "Sort")
+          
           SortTypeSelector(
             sortType = sortType,
             onSortTypeChange = onSortTypeChange,
@@ -100,6 +101,8 @@ fun SortDialog(
             icons = icons,
             modifier = Modifier.fillMaxWidth(),
           )
+
+          Spacer(modifier = Modifier.height(8.dp))
 
           SortOrderSelector(
             sortOrderAsc = sortOrderAsc,
@@ -110,47 +113,37 @@ fun SortDialog(
           )
         }
 
-        if (viewModeSelector != null || layoutModeSelector != null) {
-          Row(
-            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.Top,
-          ) {
-            if (viewModeSelector != null) {
-              ViewModeSelectorComponent(
-                viewModeSelector = viewModeSelector,
-                enabled = enableViewModeOptions,
-                modifier = Modifier.weight(1f),
-              )
-            }
-
-            if (viewModeSelector != null && layoutModeSelector != null) {
-              VerticalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-              )
-            }
-
-            if (layoutModeSelector != null) {
-              ViewModeSelectorComponent(
-                viewModeSelector = layoutModeSelector,
-                enabled = enableLayoutModeOptions,
-                modifier = Modifier.weight(1f),
-              )
-            }
-          }
-        }
-
-        GridColumnsSection(
-          folderGridColumnSelector = folderGridColumnSelector,
-          videoGridColumnSelector = videoGridColumnSelector,
-        )
-
-        if (visibilityToggles.isNotEmpty()) {
-          VisibilityTogglesSection(
-            toggles = visibilityToggles,
+        if (viewModeSelector != null) {
+          HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+          DialogSectionTitle(text = viewModeSelector.label)
+          ViewModeSelectorComponent(
+            viewModeSelector = viewModeSelector,
+            enabled = enableViewModeOptions,
             modifier = Modifier.fillMaxWidth(),
           )
+        }
+
+        if (layoutModeSelector != null) {
+          DialogSectionTitle(text = layoutModeSelector.label)
+          ViewModeSelectorComponent(
+            viewModeSelector = layoutModeSelector,
+            enabled = enableLayoutModeOptions,
+            modifier = Modifier.fillMaxWidth(),
+          )
+        }
+
+        if (folderGridColumnSelector != null || videoGridColumnSelector != null) {
+          HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+          DialogSectionTitle(text = "Grid Columns")
+          GridColumnsSection(
+            folderGridColumnSelector = folderGridColumnSelector,
+            videoGridColumnSelector = videoGridColumnSelector,
+          )
+        }
+
+        if (visibilityToggles.isNotEmpty()) {
+          HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+          VisibilityTogglesSection(toggles = visibilityToggles)
         }
       }
     },
@@ -158,7 +151,9 @@ fun SortDialog(
     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     tonalElevation = 6.dp,
     shape = MaterialTheme.shapes.extraLarge,
-    modifier = modifier,
+    modifier = modifier
+      .fillMaxWidth(0.80f)
+      .padding(vertical = 24.dp),
   )
 }
 
@@ -170,12 +165,10 @@ data class VisibilityToggle(
 
 data class ViewModeSelector(
   val label: String,
-  val firstOptionLabel: String,
-  val secondOptionLabel: String,
-  val firstOptionIcon: ImageVector,
-  val secondOptionIcon: ImageVector,
-  val isFirstOptionSelected: Boolean,
-  val onViewModeChange: (Boolean) -> Unit,
+  val options: List<String>,
+  val icons: List<ImageVector>,
+  val selectedIndex: Int,
+  val onViewModeChange: (Int) -> Unit,
 )
 
 data class GridColumnSelector(
@@ -187,8 +180,18 @@ data class GridColumnSelector(
 )
 
 // -----------------------------------------------------------------------------
-// Consolidated internal composable for sort UI (Material You styling)
+// UI Components
 // -----------------------------------------------------------------------------
+
+@Composable
+private fun DialogSectionTitle(text: String) {
+  Text(
+    text = text,
+    style = MaterialTheme.typography.titleMedium,
+    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+    color = MaterialTheme.colorScheme.onSurface
+  )
+}
 
 @Composable
 private fun SortTypeSelector(
@@ -198,83 +201,47 @@ private fun SortTypeSelector(
   icons: List<ImageVector>,
   modifier: Modifier = Modifier,
 ) {
-  Column(
-    modifier = modifier,
-    verticalArrangement = Arrangement.spacedBy(12.dp),
+  Row(
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    modifier = modifier.fillMaxWidth(),
   ) {
-    Text(
-      text = "Sort by",
-      style = MaterialTheme.typography.titleMedium,
-      fontWeight = FontWeight.Medium,
-      color = MaterialTheme.colorScheme.onSurface,
-    )
-
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceEvenly,
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      types.forEachIndexed { index, type ->
-        val selected = sortType == type
-        val shape = RoundedCornerShape(16.dp)
-
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          Box(
-            modifier =
-              Modifier
-                .size(56.dp)
-                .clip(shape)
-                .background(
-                  color =
-                    if (selected) {
-                      MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                      Color.Transparent
-                    },
-                )
-                .then(
-                  if (!selected) {
-                    Modifier.background(
-                      MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f),
-                      shape
-                    )
-                  } else Modifier
-                )
-                .clickable(
-                  onClick = { onSortTypeChange(type) },
-                  interactionSource = remember { MutableInteractionSource() },
-                  indication = ripple(bounded = true),
-                ),
-            contentAlignment = Alignment.Center,
-          ) {
-            Icon(
-              imageVector = icons[index],
-              contentDescription = type,
-              tint =
-                if (selected) {
-                  MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                  MaterialTheme.colorScheme.onSurfaceVariant
-                },
-              modifier = Modifier.size(24.dp),
-            )
-          }
-
-          Text(
-            text = type,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color =
-              if (selected) {
-                MaterialTheme.colorScheme.primary
-              } else {
-                MaterialTheme.colorScheme.onSurface
-              },
+    types.forEachIndexed { index, type ->
+      val isSelected = sortType == type
+      
+      Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+          .weight(1f)
+          .border(
+            width = 1.dp,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+            shape = RoundedCornerShape(12.dp)
           )
-        }
+          .clip(RoundedCornerShape(12.dp))
+          .background(
+            if (isSelected) MaterialTheme.colorScheme.primaryContainer 
+            else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+          )
+          .clickable { onSortTypeChange(type) }
+          .padding(vertical = 10.dp, horizontal = 4.dp)
+      ) {
+        Icon(
+          imageVector = icons[index],
+          contentDescription = null,
+          modifier = Modifier.size(24.dp),
+          tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer 
+                 else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+          text = type,
+          style = MaterialTheme.typography.labelMedium,
+          fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+          color = if (isSelected) MaterialTheme.colorScheme.primary 
+                  else MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
       }
     }
   }
@@ -296,13 +263,16 @@ private fun SortOrderSelector(
   ) {
     options.forEachIndexed { index, label ->
       SegmentedButton(
-        shape =
-          SegmentedButtonDefaults.itemShape(
-            index = index,
-            count = options.size,
-          ),
+        shape = SegmentedButtonDefaults.itemShape(
+          index = index,
+          count = options.size,
+        ),
         onClick = { onSortOrderChange(index == 0) },
         selected = index == selectedIndex,
+        colors = SegmentedButtonDefaults.colors(
+          activeContentColor = MaterialTheme.colorScheme.primary,
+          activeBorderColor = MaterialTheme.colorScheme.primary,
+        ),
         icon = {
           Icon(
             if (index == 0) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
@@ -318,156 +288,76 @@ private fun SortOrderSelector(
 }
 
 @Composable
-private fun ViewModeSelectorComponent(
-  viewModeSelector: ViewModeSelector,
-  enabled: Boolean = true,
+fun FieldChip(
+  label: String,
+  selected: Boolean,
+  onClick: () -> Unit,
   modifier: Modifier = Modifier,
+  selectedIcon: ImageVector = Icons.Filled.CheckBox,
+  unselectedIcon: ImageVector = Icons.Filled.CheckBoxOutlineBlank,
 ) {
-  val options = listOf(viewModeSelector.firstOptionLabel, viewModeSelector.secondOptionLabel)
-  val icons = listOf(viewModeSelector.firstOptionIcon, viewModeSelector.secondOptionIcon)
-  val selectedIndex = if (viewModeSelector.isFirstOptionSelected) 0 else 1
-
-  Column(
+  FilterChip(
+    selected = selected,
+    onClick = onClick,
+    label = { Text(text = label) },
+    leadingIcon = {
+      Icon(
+        imageVector = if (selected) selectedIcon else unselectedIcon,
+        contentDescription = null,
+        modifier = Modifier.size(FilterChipDefaults.IconSize),
+        tint = MaterialTheme.colorScheme.secondary,
+      )
+    },
+    border = FilterChipDefaults.filterChipBorder(
+      enabled = true,
+      selected = selected,
+      selectedBorderWidth = 1.dp,
+      selectedBorderColor = MaterialTheme.colorScheme.primary,
+    ),
     modifier = modifier,
-    verticalArrangement = Arrangement.spacedBy(8.dp),
-  ) {
-    Text(
-      text = viewModeSelector.label,
-      style = MaterialTheme.typography.titleMedium,
-      fontWeight = FontWeight.Medium,
-      color = if (enabled) {
-        MaterialTheme.colorScheme.onSurface
-      } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-      },
-    )
-
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceEvenly,
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      options.forEachIndexed { index, label ->
-        val selected = index == selectedIndex
-        val shape = RoundedCornerShape(12.dp)
-
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(6.dp),
-          modifier = Modifier
-            .clip(shape)
-            .background(
-              if (selected && enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-              else Color.Transparent
-            )
-            .clickable(enabled = enabled) { 
-              if (enabled) {
-                viewModeSelector.onViewModeChange(index == 0)
-              }
-            }
-            .padding(8.dp),
-        ) {
-          Box(
-            modifier = Modifier
-              .size(44.dp)
-              .clip(shape)
-              .background(
-                color = if (selected && enabled) {
-                  MaterialTheme.colorScheme.primaryContainer
-                } else if (enabled) {
-                  MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.4f)
-                } else {
-                  MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.2f)
-                },
-              ),
-            contentAlignment = Alignment.Center,
-          ) {
-            Icon(
-              imageVector = icons[index],
-              contentDescription = label,
-              tint = if (selected && enabled) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-              } else if (enabled) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-              } else {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-              },
-              modifier = Modifier.size(20.dp),
-            )
-          }
-
-          Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (selected && enabled) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected && enabled) {
-              MaterialTheme.colorScheme.primary
-            } else if (enabled) {
-              MaterialTheme.colorScheme.onSurface
-            } else {
-              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            },
-          )
-        }
-      }
-    }
-  }
+  )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun VisibilityTogglesSection(
   toggles: List<VisibilityToggle>,
   modifier: Modifier = Modifier,
 ) {
-  var expanded by remember { mutableStateOf(false) }
+  var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
-  Column(
-    modifier = modifier,
-    verticalArrangement = Arrangement.spacedBy(12.dp),
-  ) {
-    // Header row with Fields text and dropdown button
+  Column(modifier = modifier) {
     Row(
-      modifier = Modifier.fillMaxWidth(),
+      modifier = Modifier
+        .fillMaxWidth()
+        .clickable { expanded = !expanded }
+        .padding(vertical = 12.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically,
+      verticalAlignment = Alignment.CenterVertically
     ) {
       Text(
         text = "Fields",
         style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = MaterialTheme.colorScheme.onSurface
       )
-
-      IconButton(
-        onClick = { expanded = !expanded },
-      ) {
-        Icon(
-          imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.ArrowDropDown,
-          contentDescription = if (expanded) "Collapse" else "Expand",
-          tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
+      Icon(
+        imageVector = if (expanded) androidx.compose.material.icons.Icons.Filled.KeyboardArrowUp else androidx.compose.material.icons.Icons.Filled.KeyboardArrowDown,
+        contentDescription = if (expanded) "Collapse" else "Expand",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant
+      )
     }
 
-    // Expandable filter chips section
     if (expanded) {
-      FlowRow(
-        modifier = Modifier.fillMaxWidth(),
+      androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier
+          .fillMaxWidth()
+          .wrapContentHeight(align = Alignment.Top),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         toggles.forEach { toggle ->
-          FilterChip(
+          FieldChip(
+            label = toggle.label,
             selected = toggle.checked,
             onClick = { toggle.onCheckedChange(!toggle.checked) },
-            label = {
-              Text(
-                text = toggle.label,
-                style = MaterialTheme.typography.labelLarge,
-              )
-            },
-            leadingIcon = null,
           )
         }
       }
@@ -476,35 +366,46 @@ private fun VisibilityTogglesSection(
 }
 
 @Composable
-private fun GridColumnSelectorComponent(
-  gridColumnSelector: GridColumnSelector,
+private fun ViewModeSelectorComponent(
+  viewModeSelector: ViewModeSelector,
+  enabled: Boolean = true,
   modifier: Modifier = Modifier,
 ) {
-  Column(
-    modifier = modifier,
-    verticalArrangement = Arrangement.spacedBy(12.dp),
+  val options = viewModeSelector.options
+  val icons = viewModeSelector.icons
+  val selectedIndex = viewModeSelector.selectedIndex
+
+  SingleChoiceSegmentedButtonRow(
+    modifier = modifier.fillMaxWidth()
   ) {
-    Text(
-      text = gridColumnSelector.label,
-      style = MaterialTheme.typography.titleMedium,
-      fontWeight = FontWeight.Medium,
-      color = MaterialTheme.colorScheme.onSurface,
-    )
-
-    Slider(
-      value = gridColumnSelector.currentValue.toFloat(),
-      onValueChange = { gridColumnSelector.onValueChange(it.toInt()) },
-      valueRange = gridColumnSelector.valueRange,
-      steps = gridColumnSelector.steps,
-      modifier = Modifier.fillMaxWidth(),
-    )
-
-    Text(
-      text = "${gridColumnSelector.currentValue} columns",
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-      modifier = Modifier.align(Alignment.CenterHorizontally),
-    )
+    options.forEachIndexed { index, label ->
+      SegmentedButton(
+        shape = SegmentedButtonDefaults.itemShape(
+          index = index,
+          count = options.size
+        ),
+        onClick = {
+          if (enabled) {
+            viewModeSelector.onViewModeChange(index)
+          }
+        },
+        selected = index == selectedIndex,
+        enabled = enabled,
+        colors = SegmentedButtonDefaults.colors(
+          activeContentColor = MaterialTheme.colorScheme.primary,
+          activeBorderColor = MaterialTheme.colorScheme.primary,
+        ),
+         icon = {
+          Icon(
+            imageVector = icons[index],
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+          )
+        }
+      ) {
+        Text(text = label)
+      }
+    }
   }
 }
 
@@ -520,13 +421,6 @@ private fun GridColumnsSection(
     modifier = modifier,
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
-    Text(
-      text = "Grid Columns",
-      style = MaterialTheme.typography.titleMedium,
-      fontWeight = FontWeight.Medium,
-      color = MaterialTheme.colorScheme.onSurface,
-    )
-
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.spacedBy(16.dp),

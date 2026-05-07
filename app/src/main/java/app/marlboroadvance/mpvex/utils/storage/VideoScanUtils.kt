@@ -36,6 +36,203 @@ object VideoScanUtils {
     )
     
     /**
+     * Get all videos and audio globally across the device
+     */
+    suspend fun getAllMediaGlobally(context: Context): List<Video> = withContext(Dispatchers.IO) {
+        val videosMap = mutableMapOf<String, Video>()
+        
+        scanAllVideosFromMediaStore(context, videosMap)
+        scanAllAudioFromMediaStore(context, videosMap)
+        
+        // Sort alphabetically by default for a flat view
+        videosMap.values.sortedBy { it.displayName.lowercase(Locale.getDefault()) }
+    }
+
+    private fun scanAllVideosFromMediaStore(
+        context: Context,
+        videosMap: MutableMap<String, Video>
+    ) {
+        val projection = mutableListOf(
+            MediaStore.Video.Media._ID,
+            MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.DATA,
+            MediaStore.Video.Media.SIZE,
+            MediaStore.Video.Media.DURATION,
+            MediaStore.Video.Media.DATE_MODIFIED,
+            MediaStore.Video.Media.DATE_ADDED,
+            MediaStore.Video.Media.MIME_TYPE,
+            MediaStore.Video.Media.WIDTH,
+            MediaStore.Video.Media.HEIGHT
+        )
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            projection.add(MediaStore.Video.Media.ORIENTATION)
+        }
+        
+        try {
+            // Notice: No selection or selectionArgs. We query the entire table.
+            context.contentResolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                projection.toTypedArray(),
+                null,
+                null,
+                "${MediaStore.Video.Media.DISPLAY_NAME} ASC"
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
+                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED)
+                val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+                val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
+                val widthColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH)
+                val heightColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT)
+                val orientationColumn = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    cursor.getColumnIndex(MediaStore.Video.Media.ORIENTATION)
+                } else -1
+                
+                while (cursor.moveToNext()) {
+                    val path = cursor.getString(dataColumn) ?: continue
+                    val file = File(path)
+                    
+                    if (!file.exists()) continue
+                    
+                    val folderPath = file.parent ?: continue
+                    val id = cursor.getLong(idColumn)
+                    val displayName = cursor.getString(nameColumn)
+                    val title = file.nameWithoutExtension
+                    val size = cursor.getLong(sizeColumn)
+                    val duration = cursor.getLong(durationColumn)
+                    val dateModified = cursor.getLong(dateModifiedColumn)
+                    val dateAdded = cursor.getLong(dateAddedColumn)
+                    val mimeType = cursor.getString(mimeTypeColumn) ?: "video/*"
+                    val width = cursor.getInt(widthColumn)
+                    val height = cursor.getInt(heightColumn)
+                    val rotation = if (orientationColumn != -1) cursor.getInt(orientationColumn) else 0
+                    
+                    val uri = Uri.withAppendedPath(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id.toString())
+                    
+                    videosMap[path] = Video(
+                        id = id,
+                        title = title,
+                        displayName = displayName,
+                        path = path,
+                        uri = uri,
+                        duration = duration,
+                        durationFormatted = MediaFormatter.formatDuration(duration),
+                        size = size,
+                        sizeFormatted = MediaFormatter.formatFileSize(size),
+                        dateModified = dateModified,
+                        dateAdded = dateAdded,
+                        mimeType = mimeType,
+                        bucketId = folderPath,
+                        bucketDisplayName = File(folderPath).name,
+                        width = width,
+                        height = height,
+                        rotation = rotation,
+                        fps = 0f,
+                        resolution = MediaFormatter.formatResolution(width, height),
+                        hasEmbeddedSubtitles = false,
+                        subtitleCodec = "",
+                        isAudio = false
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Global MediaStore video scan error", e)
+        }
+    }
+
+    private fun scanAllAudioFromMediaStore(
+        context: Context,
+        videosMap: MutableMap<String, Video>
+    ) {
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.MIME_TYPE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM
+        )
+        
+        try {
+            context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                null,
+                null,
+                "${MediaStore.Audio.Media.DISPLAY_NAME} ASC"
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+                val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                
+                while (cursor.moveToNext()) {
+                    val path = cursor.getString(dataColumn) ?: continue
+                    val file = File(path)
+                    
+                    if (!file.exists()) continue
+                    
+                    val folderPath = file.parent ?: continue
+                    val id = cursor.getLong(idColumn)
+                    val displayName = cursor.getString(nameColumn)
+                    val title = file.nameWithoutExtension
+                    val size = cursor.getLong(sizeColumn)
+                    val duration = cursor.getLong(durationColumn)
+                    val dateModified = cursor.getLong(dateModifiedColumn)
+                    val dateAdded = cursor.getLong(dateAddedColumn)
+                    val mimeType = cursor.getString(mimeTypeColumn) ?: "audio/*"
+                    val artist = cursor.getString(artistColumn) ?: "Unknown Artist"
+                    val album = cursor.getString(albumColumn) ?: "Unknown Album"
+                    
+                    val uri = Uri.withAppendedPath(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id.toString())
+                    
+                    videosMap[path] = Video(
+                        id = id,
+                        title = title,
+                        displayName = displayName,
+                        path = path,
+                        uri = uri,
+                        duration = duration,
+                        durationFormatted = MediaFormatter.formatDuration(duration),
+                        size = size,
+                        sizeFormatted = MediaFormatter.formatFileSize(size),
+                        dateModified = dateModified,
+                        dateAdded = dateAdded,
+                        mimeType = mimeType,
+                        bucketId = folderPath,
+                        bucketDisplayName = File(folderPath).name,
+                        width = 0,
+                        height = 0,
+                        fps = 0f,
+                        resolution = "",
+                        hasEmbeddedSubtitles = false,
+                        subtitleCodec = "",
+                        isAudio = true,
+                        artist = artist,
+                        album = album
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Global MediaStore audio scan error", e)
+        }
+    }
+    
+    /**
      * Get all videos and audio in a specific folder
      * MediaStore first, filesystem fallback for external devices
      */

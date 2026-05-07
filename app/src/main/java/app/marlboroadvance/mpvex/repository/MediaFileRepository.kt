@@ -40,6 +40,11 @@ object MediaFileRepository {
 
   // ==================== VIDEO FILE OPERATIONS ====================
 
+  suspend fun getAllVideosGlobally(context: Context): List<Video> =
+    withContext(Dispatchers.IO) {
+      runCatching { VideoScanUtils.getAllMediaGlobally(context) }.getOrDefault(emptyList())
+    }
+
   suspend fun getVideosInFolder(context: Context, bucketId: String): List<Video> =
     withContext(Dispatchers.IO) {
       runCatching { VideoScanUtils.getVideosInFolder(context, bucketId) }.getOrDefault(emptyList())

@@ -119,6 +119,7 @@ enum class VideoSortType {
 enum class FolderViewMode {
   AlbumView,
   FileManager,
+  FlatFileView,
   ;
 
   val displayName: String
@@ -126,6 +127,7 @@ enum class FolderViewMode {
       when (this) {
         AlbumView -> "Folder View"
         FileManager -> "Tree View"
+        FlatFileView -> "File View"
       }
 }
 
