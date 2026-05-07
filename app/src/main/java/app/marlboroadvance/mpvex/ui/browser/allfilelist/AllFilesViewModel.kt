@@ -25,6 +25,13 @@ class AllFilesViewModel(application: Application) : BaseBrowserViewModel<VideoWi
   private val _videosWithPlaybackInfo = MutableStateFlow<List<VideoWithPlaybackInfo>>(emptyList())
   val videosWithPlaybackInfo: StateFlow<List<VideoWithPlaybackInfo>> = _videosWithPlaybackInfo.asStateFlow()
 
+  // Tracks if a move operation emptied a subset of the global list (e.g. all files from a folder moved out)
+  private val _videosWereDeletedOrMoved = MutableStateFlow(false)
+  val videosWereDeletedOrMoved: StateFlow<Boolean> = _videosWereDeletedOrMoved.asStateFlow()
+
+  // Track previous count to detect mass deletions/moves
+  private var previousVideoCount = 0
+
   init {
     loadData()
   }
@@ -34,31 +41,57 @@ class AllFilesViewModel(application: Application) : BaseBrowserViewModel<VideoWi
       try {
         _isLoading.value = true
         var videoList = MediaFileRepository.getAllVideosGlobally(getApplication())
-        
+
         if (!browserPreferences.showAudioFiles.get()) {
           videoList = videoList.filterNot { it.isAudio }
         }
 
+        // Detect if a large number of files disappeared (e.g. moved out)
+        if (previousVideoCount > 0 && videoList.isEmpty()) {
+          _videosWereDeletedOrMoved.value = true
+        } else if (videoList.isNotEmpty()) {
+          _videosWereDeletedOrMoved.value = false
+        }
+        previousVideoCount = videoList.size
+
+        // STEP 1: Push the fast/cached MediaStore data to the UI instantly
+        loadPlaybackInfo(videoList)
+        
+        // Dismiss the loading spinner immediately so the user can interact
+        _isLoading.value = false 
+
+        // STEP 2: Process heavy metadata enrichment in the background
         if (MetadataRetrieval.isVideoMetadataNeeded(browserPreferences)) {
-          videoList = MetadataRetrieval.enrichVideosIfNeeded(
+          val enrichedList = MetadataRetrieval.enrichVideosIfNeeded(
             context = getApplication(),
             videos = videoList,
             browserPreferences = browserPreferences,
             metadataCache = metadataCache
           )
+          // Silently update the UI with the enriched durations/resolutions
+          loadPlaybackInfo(enrichedList)
         }
-
-        loadPlaybackInfo(videoList)
+        
       } catch (e: Exception) {
         Log.e("AllFilesViewModel", "Error loading global videos", e)
-      } finally {
         _isLoading.value = false
       }
     }
   }
 
   override fun refresh(silent: Boolean) {
+    // If it's a manual refresh (e.g., swipe to refresh), clear the cache so it forces a fresh scan
+    if (!silent) {
+      MediaFileRepository.clearCache()
+    }
     loadData()
+  }
+
+  /**
+   * Called after a successful move operation so the UI can react (e.g. show empty state).
+   */
+  fun setVideosWereDeletedOrMoved() {
+    _videosWereDeletedOrMoved.value = true
   }
 
   private suspend fun loadPlaybackInfo(videos: List<Video>) {
@@ -70,7 +103,7 @@ class AllFilesViewModel(application: Application) : BaseBrowserViewModel<VideoWi
 
     val videosWithInfo = videos.map { video ->
       val playbackState = playbackStates.find { it.mediaTitle == video.displayName }
-      
+
       val videoWithOrientation = if (playbackState?.savedOrientation != null) {
         video.copy(savedOrientation = playbackState.savedOrientation)
       } else video
@@ -86,11 +119,11 @@ class AllFilesViewModel(application: Application) : BaseBrowserViewModel<VideoWi
       val isOldAndUnplayed = playbackState == null && videoAge <= thresholdMillis
 
       val isWatched = if (playbackState != null && video.duration > 0) {
-         val durationSeconds = video.duration / 1000
-         val watched = durationSeconds - playbackState.timeRemaining.toLong()
-         val progressValue = (watched.toFloat() / durationSeconds.toFloat()).coerceIn(0f, 1f)
-         val calculatedWatched = progressValue >= (watchedThreshold / 100f)
-         playbackState.hasBeenWatched || calculatedWatched
+        val durationSeconds = video.duration / 1000
+        val watched = durationSeconds - playbackState.timeRemaining.toLong()
+        val progressValue = (watched.toFloat() / durationSeconds.toFloat()).coerceIn(0f, 1f)
+        val calculatedWatched = progressValue >= (watchedThreshold / 100f)
+        playbackState.hasBeenWatched || calculatedWatched
       } else false
 
       VideoWithPlaybackInfo(

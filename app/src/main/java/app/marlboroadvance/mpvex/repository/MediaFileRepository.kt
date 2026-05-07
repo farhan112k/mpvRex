@@ -1,6 +1,10 @@
 package app.marlboroadvance.mpvex.repository
 
 import android.content.Context
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import app.marlboroadvance.mpvex.domain.browser.FileSystemItem
 import app.marlboroadvance.mpvex.domain.browser.PathComponent
 import app.marlboroadvance.mpvex.domain.media.model.Video
@@ -13,6 +17,8 @@ import app.marlboroadvance.mpvex.domain.playbackstate.repository.PlaybackStateRe
 import app.marlboroadvance.mpvex.preferences.AppearancePreferences
 import app.marlboroadvance.mpvex.preferences.BrowserPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.koin.core.context.GlobalContext
 import java.io.File
@@ -23,11 +29,47 @@ import java.io.File
  */
 object MediaFileRepository {
 
+  // Global cache state
+  private var globalVideosCache: List<Video>? = null
+  private val cacheMutex = Mutex()
+  private var isObserverRegistered = false
+
+  // Listens for external changes to the file system to invalidate the cache
+  private val mediaStoreObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+    override fun onChange(selfChange: Boolean) {
+      super.onChange(selfChange)
+      // File system changed, invalidate cache immediately
+      globalVideosCache = null
+    }
+  }
+
+  private fun registerObserverIfNeeded(context: Context) {
+    if (!isObserverRegistered) {
+      try {
+        val contentResolver = context.applicationContext.contentResolver
+        contentResolver.registerContentObserver(
+          MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+          true,
+          mediaStoreObserver
+        )
+        contentResolver.registerContentObserver(
+          MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+          true,
+          mediaStoreObserver
+        )
+        isObserverRegistered = true
+      } catch (e: Exception) {
+        // Fallback gracefully if observer registration fails
+      }
+    }
+  }
+
   /**
    * Clears all caches
    */
   fun clearCache() {
     CoreMediaScanner.clearCache()
+    globalVideosCache = null
   }
 
   // ==================== FOLDER OPERATIONS ====================
@@ -42,7 +84,17 @@ object MediaFileRepository {
 
   suspend fun getAllVideosGlobally(context: Context): List<Video> =
     withContext(Dispatchers.IO) {
-      runCatching { VideoScanUtils.getAllMediaGlobally(context) }.getOrDefault(emptyList())
+      registerObserverIfNeeded(context)
+      
+      cacheMutex.withLock {
+        // Return cached list if available
+        globalVideosCache?.let { return@withLock it }
+        
+        // Otherwise, fetch from scratch and cache
+        val videos = runCatching { VideoScanUtils.getAllMediaGlobally(context) }.getOrDefault(emptyList())
+        globalVideosCache = videos
+        videos
+      }
     }
 
   suspend fun getVideosInFolder(context: Context, bucketId: String): List<Video> =
