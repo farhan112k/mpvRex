@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -121,15 +122,23 @@ fun VerticalSlider(
           width = 1.dp,
           color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
           shape = RoundedCornerShape(16.dp),
-        ),
+        ),  
       contentAlignment = Alignment.BottomCenter,
     ) {
       val targetHeight by animateFloatAsState(percentage(coercedValue, range), label = "vsliderheight")
-      Box(
+     Box(
         Modifier
-          .fillMaxWidth()
-          .fillMaxHeight(targetHeight)
-          .background(MaterialTheme.colorScheme.tertiary),
+        .fillMaxWidth()
+        .fillMaxHeight(targetHeight)
+        .clip(RoundedCornerShape(16.dp))
+        .background(
+          brush = Brush.verticalGradient(
+            colors = listOf(
+              MaterialTheme.colorScheme.onTertiary,
+              MaterialTheme.colorScheme.primary
+            )
+          )
+        ),
       )
       if (overflowRange != null && overflowValue != null) {
         val overflowHeight by animateFloatAsState(
@@ -138,9 +147,17 @@ fun VerticalSlider(
         )
         Box(
           Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(overflowHeight)
-            .background(MaterialTheme.colorScheme.errorContainer),
+          .fillMaxWidth()
+          .fillMaxHeight(overflowHeight)
+          .clip(RoundedCornerShape(16.dp))
+          .background(
+            brush = Brush.verticalGradient(
+              colors = listOf(
+                MaterialTheme.colorScheme.onError,
+                MaterialTheme.colorScheme.errorContainer
+              )
+            )
+          ),
         )
       }
     }
@@ -216,9 +233,17 @@ fun VerticalSlider(
       val targetHeight by animateFloatAsState(percentage(coercedValue, range), label = "vsliderheight")
       Box(
         Modifier
-          .fillMaxWidth()
-          .fillMaxHeight(targetHeight)
-          .background(MaterialTheme.colorScheme.tertiary),
+        .fillMaxWidth()
+        .fillMaxHeight(targetHeight)
+        .clip(RoundedCornerShape(16.dp))
+        .background(
+          brush = Brush.verticalGradient(
+            colors = listOf(
+              MaterialTheme.colorScheme.onTertiary,
+              MaterialTheme.colorScheme.primary
+            )
+          )
+        ),
       )
       if (overflowRange != null && overflowValue != null) {
         val overflowHeight by animateFloatAsState(
@@ -227,9 +252,17 @@ fun VerticalSlider(
         )
         Box(
           Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(overflowHeight)
-            .background(MaterialTheme.colorScheme.errorContainer),
+          .fillMaxWidth()
+          .fillMaxHeight(overflowHeight)
+          .clip(RoundedCornerShape(16.dp))
+          .background(
+            brush = Brush.verticalGradient(
+              colors = listOf(
+                MaterialTheme.colorScheme.onError,
+                MaterialTheme.colorScheme.errorContainer
+              )
+            )
+          ),
         )
       }
     }
