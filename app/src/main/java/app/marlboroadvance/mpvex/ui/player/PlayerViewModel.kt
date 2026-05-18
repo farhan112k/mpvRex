@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.net.Uri
+import android.graphics.Bitmap
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.DisplayMetrics
@@ -24,6 +25,7 @@ import app.marlboroadvance.mpvex.repository.wyzie.WyzieSearchRepository
 import app.marlboroadvance.mpvex.repository.wyzie.WyzieSubtitle
 import app.marlboroadvance.mpvex.utils.media.ChecksumUtils
 import app.marlboroadvance.mpvex.utils.media.MediaInfoParser
+import app.marlboroadvance.mpvex.domain.thumbnail.ThumbnailRepository
 import `is`.xyz.mpv.MPVLib
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -91,6 +93,7 @@ class PlayerViewModel(
   private val playbackStateRepository: app.marlboroadvance.mpvex.domain.playbackstate.repository.PlaybackStateRepository by inject()
   private val recentlyPlayedRepository: app.marlboroadvance.mpvex.domain.recentlyplayed.repository.RecentlyPlayedRepository by inject()
   private val wyzieRepository: WyzieSearchRepository by inject()
+  private val thumbnailRepository: ThumbnailRepository by inject()
 
   private val browserPreferences: app.marlboroadvance.mpvex.preferences.BrowserPreferences by inject()
 
@@ -1421,6 +1424,10 @@ class PlayerViewModel(
   }
 
   // ==================== Playlist Management ====================
+
+  suspend fun getPlaylistItemThumbnail(uri: Uri, path: String): Bitmap? {
+    return thumbnailRepository.getThumbnailForUri(uri, path)
+  }
 
   fun hasPlaylistSupport(): Boolean {
     val playlistModeEnabled = playerPreferences.playlistMode.get()

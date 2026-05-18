@@ -350,6 +350,7 @@ fun PlayerSheets(
           onItemClick = { item ->
             viewModel.playPlaylistItem(item.index)
           },
+          getThumbnail = { uri, path -> viewModel.getPlaylistItemThumbnail(uri, path) },
           totalCount = totalCount,
           isM3UPlaylist = isM3U,
           playerPreferences = playerPreferences,

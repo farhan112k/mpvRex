@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -710,5 +711,177 @@ class ThumbnailRepository(
       md.update(";".toByteArray())
     }
     return md.digest().joinToString("") { b -> "%02x".format(b) }
+  }
+
+  /**
+   * Resolves the absolute file path from an Android content URI.
+   * Native extractors like FastThumbnails require absolute paths to function.
+   */
+  private fun getRealPathFromUri(context: android.content.Context, uri: android.net.Uri): String? {
+    if (uri.scheme == "file") return uri.path
+    if (uri.scheme == "content") {
+      runCatching {
+        context.contentResolver.query(
+          uri, 
+          arrayOf(android.provider.MediaStore.MediaColumns.DATA), 
+          null, null, null
+        )?.use { cursor ->
+          if (cursor.moveToFirst()) {
+            val index = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
+            if (index != -1) return cursor.getString(index)
+          }
+        }
+      }
+    }
+    return null
+  }
+
+  /**
+   * Fetches a thumbnail for arbitrary URIs (like Playlist items) utilizing the repository's 
+   * safe LruCache, Disk Cache, concurrency locks, and fallback extraction strategies.
+   */
+  suspend fun getThumbnailForUri(uri: android.net.Uri, path: String, dimension: Int = 512): Bitmap? = withContext(Dispatchers.IO) {
+    val actualPath = path.ifBlank { uri.toString() }
+    val isNetwork = isNetworkUrl(actualPath)
+    
+    val prefStrategy = appearancePreferences.thumbnailStrategy.get()
+
+    // 1. DYNAMIC CACHE KEY
+    // This prevents them from being orphaned and re-fetched when local thumbnail preferences change.
+    val key = if (isNetwork) {
+      "playlist_thumb|${actualPath}|$dimension|network|pos10s"
+    } else {
+      val strategyStr = prefStrategy.name
+      val percentStr = appearancePreferences.thumbnailPositionPercent.get().toString()
+      "playlist_thumb|${actualPath}|$dimension|$strategyStr|$percentStr"
+    }
+
+    // Check memory cache first
+    memoryCache.get(key)?.let { return@withContext it }
+    
+    // Prevent duplicate concurrent generations
+    ongoingOperations[key]?.let { return@withContext it.await() }
+
+    val deferred = async {
+      try {
+        var bitmap: Bitmap? = null
+
+        // CHECK DISK CACHE
+        val diskDir = if (isNetwork) networkDiskDir else localDiskDir
+        val diskFile = java.io.File(diskDir, keyToFileName(key))
+        
+        if (diskFile.exists()) {
+          bitmap = runCatching {
+            val options = android.graphics.BitmapFactory.Options().apply {
+              inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 
+            }
+            android.graphics.BitmapFactory.decodeFile(diskFile.absolutePath, options)
+          }.getOrNull()
+        }
+
+        // Extract ONLY if disk cache misses
+        if (bitmap == null) {
+          ensureActive() 
+          
+          if (isNetwork) {
+            if (!networkThumbnailFailed.containsKey(actualPath)) {
+              val retriever = android.media.MediaMetadataRetriever()
+              try {
+                retriever.setDataSource(actualPath, emptyMap<String, String>())
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                  bitmap = retriever.getScaledFrameAtTime(10_000_000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dimension, dimension)
+                } else {
+                  retriever.getFrameAtTime(10_000_000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let { raw ->
+                    bitmap = Bitmap.createScaledBitmap(raw, dimension, dimension, true).also { if (it !== raw) raw.recycle() }
+                  }
+                }
+              } catch (e: Exception) {
+                networkThumbnailFailed[actualPath] = true
+              } finally {
+                runCatching { retriever.release() }
+              }
+            }
+          } else {
+            // --- LOCAL OR CONTENT URI ---
+            val realPath = getRealPathFromUri(context, uri) ?: actualPath
+
+            // 2. DYNAMIC TIMESTAMP: Calculate extraction position based on preferences
+            var positionSec = 10.0
+            var positionUs = 10_000_000L
+            
+            if (prefStrategy != app.marlboroadvance.mpvex.preferences.ThumbnailStrategy.FirstFrame) {
+              // Fetch duration on the fly (Only happens on cache misses, so performance impact is negligible)
+              val durationMs = runCatching {
+                val retriever = android.media.MediaMetadataRetriever()
+                retriever.setDataSource(context, uri)
+                val durStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                retriever.release()
+                durStr?.toLongOrNull() ?: 0L
+              }.getOrDefault(0L)
+
+              if (durationMs > 0) {
+                val durationSec = durationMs / 1000.0
+                val prefPercent = appearancePreferences.thumbnailPositionPercent.get() / 100.0
+                positionSec = (durationSec * prefPercent).coerceIn(0.0, kotlin.math.max(0.0, durationSec - 0.1))
+                positionUs = (positionSec * 1_000_000).toLong()
+              }
+            }
+
+            // Step A: Custom Extractor (Using dynamic positionSec)
+            bitmap = runCatching {
+               FastThumbnails.generateAsync(realPath, positionSec, dimension, false)
+            }.getOrNull()
+
+            ensureActive() 
+
+            // Step B: Native Extractor fallback (Using dynamic positionUs)
+            if (bitmap == null) {
+               bitmap = runCatching {
+                 val retriever = android.media.MediaMetadataRetriever()
+                 retriever.setDataSource(context, uri)
+                 val frame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                    retriever.getScaledFrameAtTime(positionUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dimension, dimension)
+                 } else {
+                    retriever.getFrameAtTime(positionUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let { raw ->
+                       Bitmap.createScaledBitmap(raw, dimension, dimension, true).also { if (it !== raw) raw.recycle() }
+                    }
+                 }
+                 retriever.release()
+                 frame
+               }.getOrNull()
+            }
+
+            // Step C: Absolute last resort
+            if (bitmap == null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+              bitmap = runCatching {
+                context.contentResolver.loadThumbnail(uri, android.util.Size(dimension, dimension), null)
+              }.getOrNull()
+            }
+          }
+        }
+
+        // Cache the successful result to Memory AND Disk
+        bitmap?.let { bmp ->
+          memoryCache.put(key, bmp)
+          if (isNetwork) networkMemoryKeys.add(key)
+          
+          if (!diskFile.exists()) {
+            repositoryScope.launch(Dispatchers.IO) {
+              runCatching {
+                java.io.FileOutputStream(diskFile).use { out ->
+                  bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, diskJpegQuality, out)
+                  out.flush()
+                }
+              }
+            }
+          }
+        }
+        
+        bitmap
+      } finally {ongoingOperations.remove(key)}
+    }
+    
+    ongoingOperations[key] = deferred
+    return@withContext deferred.await()
   }
 }
