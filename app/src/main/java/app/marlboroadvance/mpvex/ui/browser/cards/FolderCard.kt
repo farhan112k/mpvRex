@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.twotone.Folder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -80,7 +81,7 @@ fun FolderCard(
     thumbnailSize = thumbnailSize,
     thumbnailIcon = {
       Icon(
-        customIcon ?: Icons.Filled.Folder,
+        customIcon ?: Icons.TwoTone.Folder,
         contentDescription = "Folder",
         modifier = Modifier.size(if (isGridMode) 56.dp else 40.dp),
         tint = MaterialTheme.colorScheme.secondary,
