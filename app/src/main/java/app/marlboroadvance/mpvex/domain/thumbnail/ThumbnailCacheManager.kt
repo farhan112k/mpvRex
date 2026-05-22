@@ -84,12 +84,22 @@ class ThumbnailCacheManager(
             path.startsWith("sftp://", ignoreCase = true)
     }
 
-    fun loadFromDisk(video: Video): Bitmap? {
+    fun loadFromDisk(video: Video, targetDimension: Int = diskCacheDimension): Bitmap? {
         val diskFile = File(diskDirFor(video), keyToFileName(diskKey(video)))
         if (!diskFile.exists()) return null
         
         return runCatching {
-            val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+            val options = BitmapFactory.Options().apply {
+                // Read bounds first to calculate sample size
+                inJustDecodeBounds = true
+                BitmapFactory.decodeFile(diskFile.absolutePath, this)
+                
+                // Use your new utility function here
+                inSampleSize = calculateThumbnailSampleSize(outWidth, outHeight, targetDimension)
+                
+                inJustDecodeBounds = false
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
             BitmapFactory.decodeFile(diskFile.absolutePath, options)
         }.getOrNull()
     }
