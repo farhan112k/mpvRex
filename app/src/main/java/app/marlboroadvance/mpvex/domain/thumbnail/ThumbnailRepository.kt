@@ -12,6 +12,8 @@ import app.marlboroadvance.mpvex.preferences.AppearancePreferences
 import app.marlboroadvance.mpvex.domain.thumbnail.ThumbnailCacheManager
 import app.marlboroadvance.mpvex.domain.thumbnail.ThumbnailExtractionEngine
 import app.marlboroadvance.mpvex.domain.thumbnail.FolderThumbnailScheduler
+import app.marlboroadvance.mpvex.ui.browser.networkstreaming.proxy.NetworkStreamingProxy
+import app.marlboroadvance.mpvex.domain.network.NetworkConnection
 import `is`.xyz.mpv.FastThumbnails
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -32,7 +34,7 @@ import java.util.Collections
 import kotlin.math.max
 
 class ThumbnailRepository(
-  private val context: Context,
+ context: Context,
 ) {
   private val appearancePreferences by lazy {KoinJavaComponent.get<AppearancePreferences>(AppearancePreferences::class.java)}
 
@@ -162,6 +164,99 @@ class ThumbnailRepository(
     
     val key = cacheManager.thumbnailKey(video, widthPx, heightPx)
     return cacheManager.getFromMemory(key)
+  }
+
+  /**
+   * Resolves network video thumbnails via a localized proxy stream.
+   * Orchestrates the proxy, but delegates caching to CacheManager and extraction to ExtractionEngine.
+   */
+  suspend fun getThumbnailViaProxy(
+    path: String,
+    name: String,
+    size: Long,
+    connection: NetworkConnection,
+    dimension: Int
+  ): Bitmap? = withContext(Dispatchers.IO) {
+    if (!appearancePreferences.showNetworkThumbnails.get()) return@withContext null
+
+    // 1. Create baseline Video representing the REAL network file for accurate caching
+    val originalVideo = Video(
+      id = path.hashCode().toLong(),
+      title = name,
+      displayName = name,
+      path = path,
+      uri = android.net.Uri.parse(path),
+      duration = 0, // Engine defaults to 10s extraction if duration is 0
+      durationFormatted = "",
+      size = size,
+      sizeFormatted = "",
+      dateModified = 0,
+      dateAdded = 0,
+      mimeType = "video/*",
+      bucketId = "",
+      bucketDisplayName = "",
+      width = 0,
+      height = 0,
+      fps = 0f,
+      resolution = ""
+    )
+
+    // Map UI dimension to width/height to keep cache keys consistent
+    val key = cacheManager.thumbnailKey(originalVideo, dimension, dimension)
+    val videoKey = cacheManager.videoBaseKey(originalVideo)
+
+    // 2. Check Memory Cache
+    cacheManager.getFromMemory(key)?.let { return@withContext it }
+
+    // Prevent concurrent identical operations
+    ongoingOperations[key]?.let { return@withContext it.await() }
+
+    val deferred = async {
+      try {
+        // 3. Check Disk Cache
+        cacheManager.loadFromDisk(originalVideo)?.let { thumbnail ->
+          cacheManager.putInMemory(key, thumbnail, true)
+          _thumbnailReadyKeys.tryEmit(key)
+          return@async thumbnail
+        }
+
+        // 4. Spin up Proxy
+        val proxy = NetworkStreamingProxy.getInstance()
+        val streamId = "thumb_${path.hashCode()}_${System.nanoTime()}"
+        val localUrl = proxy.registerStream(streamId, connection, path, size)
+
+        // 5. Delegate extraction to the Engine using the localhost URL
+        val thumbnail = try {
+          val tempVideo = originalVideo.copy(
+            path = localUrl,
+            uri = android.net.Uri.parse(localUrl)
+          )
+          
+          extractionEngine.extract(
+            video = tempVideo,
+            dimension = cacheManager.diskCacheDimension, // Extract at high-res, CacheManager scales it
+            videoKey = videoKey, // Pass original key so failure states map to the real SMB path
+            isNetwork = true // Force strict network rules
+          )
+        } finally {
+          proxy.unregisterStream(streamId)
+        }
+
+        if (thumbnail == null) return@async null
+
+        // 6. Save State
+        cacheManager.putInMemory(key, thumbnail, true)
+        _thumbnailReadyKeys.tryEmit(key)
+        cacheManager.writeToDisk(originalVideo, thumbnail)
+
+        thumbnail
+      } finally {
+        ongoingOperations.remove(key)
+      }
+    }
+
+    ongoingOperations[key] = deferred
+    return@withContext deferred.await()
   }
 
   fun clearLocalThumbnailCache() {
