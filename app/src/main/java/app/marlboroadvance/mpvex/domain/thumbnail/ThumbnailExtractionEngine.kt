@@ -50,16 +50,35 @@ class ThumbnailExtractionEngine(
             if (networkThumbnailFailed.containsKey(videoKey)) {
                 return@withContext null
             }
+
+            // 1. FAST PATH: Attempt to pull embedded cover art (uses almost zero bandwidth/CPU)
+            val embeddedResult = runCatching {
+                val retriever = android.media.MediaMetadataRetriever()
+                retriever.setDataSource(video.path.ifBlank { video.uri.toString() }, emptyMap<String, String>())
+                val art = retriever.embeddedPicture
+                retriever.release()
+                if (art != null) BitmapFactory.decodeByteArray(art, 0, art.size) else null
+            }.getOrNull()
+
+            if (embeddedResult != null) {
+                android.util.Log.d("ThumbnailExtractionEngine", "Extracted embedded artwork for ${video.displayName}")
+                return@withContext embeddedResult.scaleToThumbnailMax(dimension)
+            }
             
+            // 2. PRIMARY EXTRACTOR: MediaMetadataRetriever (Hardware Accelerated + Solid Check)
+            val retrieverResult = generateWithMediaMetadataRetriever(video, dimension)
+            if (retrieverResult != null) return@withContext retrieverResult
+
+            // 3. FALLBACK EXTRACTOR: FastThumbnails (Software Decoding for unsupported codecs)
+            android.util.Log.w("ThumbnailExtractionEngine", "Hardware Retriever failed for network stream ${video.displayName}, falling back to FastThumbnails.")
             val fastResult = generateWithFastThumbnails(video, dimension, true)
             if (fastResult != null) return@withContext fastResult
 
-            android.util.Log.w("ThumbnailExtractionEngine", "FastThumbnails failed for network stream ${video.displayName}, trying Retriever at 3s mark.")
-            val retrieverResult = generateWithMediaMetadataRetriever(video, dimension)
-            if (retrieverResult == null) {
-                networkThumbnailFailed[videoKey] = true
-            }
-            return@withContext retrieverResult
+            // If all 3 fail, the stream is dead or completely unreadable.
+            android.util.Log.e("ThumbnailExtractionEngine", "All extraction strategies failed for network stream ${video.displayName}.")
+            networkThumbnailFailed[videoKey] = true
+            return@withContext null
+            
         } else {
             // ---- Local-file path ----
             val isShortVideo = video.duration in 1L..60_000L // 60 seconds
@@ -107,6 +126,7 @@ class ThumbnailExtractionEngine(
         val basePositionSec = preferredPositionSeconds(video, isNetwork)
 
         if (isNetwork) {
+            // STRICT NETWORK RULE: Only try once. No solid check to save CPU.
             return try {
                 val bmp = FastThumbnails.generateAsync(
                     video.path.ifBlank { video.uri.toString() },
@@ -158,7 +178,6 @@ class ThumbnailExtractionEngine(
                 return rotateIfNeeded(video, lastSolidBitmap)
             }
 
-            // Hard failure (library crashed or returned null every time). Triggers MediaStore fallback.
             return null
         }
     }
@@ -213,27 +232,54 @@ class ThumbnailExtractionEngine(
     private suspend fun generateWithMediaMetadataRetriever(video: Video, dimension: Int): Bitmap? = withContext(Dispatchers.IO) {
         val url = video.path.ifBlank { video.uri.toString() }
         val retriever = android.media.MediaMetadataRetriever()
+        var lastSolidBitmap: Bitmap? = null
+
         try {
             retriever.setDataSource(url, emptyMap<String, String>())
             val streamDurationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.takeIf { it > 0L }
             val durationMs = streamDurationMs ?: video.duration.takeIf { it > 0L }
             
-            val positionUs: Long = if (durationMs != null) {
-                minOf(3_000_000L, (durationMs - 100L).coerceAtLeast(0L) * 1000L)
-            } else {
-                3_000_000L
+            // Try 10s mark, then 20s mark for network streams
+            val attemptOffsetsUs = listOf(10_000_000L, 20_000_000L)
+
+            for (offsetUs in attemptOffsetsUs) {
+                val positionUs: Long = if (durationMs != null) {
+                    minOf(offsetUs, (durationMs - 100L).coerceAtLeast(0L) * 1000L)
+                } else {
+                    offsetUs
+                }
+
+                val frame: Bitmap? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                    runCatching { retriever.getScaledFrameAtTime(positionUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dimension, dimension) }.getOrNull()
+                        ?: retriever.getFrameAtTime(positionUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.scaleToThumbnailMax(dimension)
+                } else {
+                    retriever.getFrameAtTime(positionUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.scaleToThumbnailMax(dimension)
+                }
+
+                if (frame == null) continue // Frame extraction failed, try next timestamp just in case
+
+                if (isMostlySolidThumbnail(frame)) {
+                    android.util.Log.w("ThumbnailExtractionEngine", "Retriever: Solid network frame at ${positionUs / 1_000_000}s for ${video.displayName}.")
+                    lastSolidBitmap?.recycle()
+                    lastSolidBitmap = frame
+                    continue
+                }
+
+                // Good frame found
+                lastSolidBitmap?.recycle()
+                return@withContext rotateIfNeeded(video, frame)
             }
 
-            val frame: Bitmap? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-                retriever.getScaledFrameAtTime(positionUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dimension, dimension)
-            } else {
-                retriever.getFrameAtTime(positionUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.scaleToThumbnailMax(dimension)
+            // Loop exhausted. If we successfully extracted at least one solid frame, accept it.
+            if (lastSolidBitmap != null) {
+                android.util.Log.w("ThumbnailExtractionEngine", "Retriever: All attempts solid for network file ${video.displayName}. Accepting final frame.")
+                return@withContext rotateIfNeeded(video, lastSolidBitmap)
             }
-            if (frame == null) return@withContext null
 
-            rotateIfNeeded(video, frame)
+            return@withContext null
         } catch (e: Throwable) {
-            null
+            lastSolidBitmap?.recycle()
+            return@withContext null
         } finally {
             runCatching { retriever.release() }
         }

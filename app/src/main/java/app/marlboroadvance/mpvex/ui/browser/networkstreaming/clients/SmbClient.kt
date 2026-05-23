@@ -101,6 +101,8 @@ class SmbClient(connection: NetworkConnection) : BaseNetworkClient(connection) {
                 com.hierynomus.mssmb2.SMB2Dialect.SMB_2_0_2,
             )
             .withDfsEnabled(false)
+            .withSigningRequired(false) // Bypasses software crypto bottleneck
+            .withEncryptData(false)     // Bypasses software crypto bottleneck
             .build()
 
         smbClient = SMBClient(config)
@@ -142,15 +144,15 @@ class SmbClient(connection: NetworkConnection) : BaseNetworkClient(connection) {
     override suspend fun performListFiles(path: String): List<NetworkFile> {
         return executeWithRetry {
             val diskShare = session?.connectShare(shareName) as? DiskShare ?: throw java.net.SocketException("Session is null or share failed")
-            
-            try {
+
+            diskShare.use { diskShare ->
                 val smbPath = path.trim('/').replace('/', '\\')
                 val fileList = diskShare.list(smbPath)
-                
+
                 fileList.filter { it.fileName != "." && it.fileName != ".." }
                     .map { info ->
                         val fileName = info.fileName
-                        val filePath = if (path.isEmpty() || path == "/") fileName 
+                        val filePath = if (path.isEmpty() || path == "/") fileName
                         else "${path.trimEnd('/')}/$fileName"
 
                         NetworkFile(
@@ -162,8 +164,6 @@ class SmbClient(connection: NetworkConnection) : BaseNetworkClient(connection) {
                             mimeType = if (info.fileAttributes and 0x10L != 0L) null else getMimeType(fileName)
                         )
                     }
-            } finally {
-                diskShare.close()
             }
         }
     }
